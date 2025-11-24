@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prototipo Duoc UC - BOM Manager</title>
+    
+    <!-- Estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel para compilar JSX en el navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Recharts (Gráficos) -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        /************************************************************
+         * 1. GLOBALS & UTILS
+         ************************************************************/
+        const { useState, useEffect, useMemo } = React;
+        const { 
+            BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
+            Tooltip, Legend, ResponsiveContainer 
+        } = Recharts;
+        
+        // Lucide Icons mapping from UMD
+        const { 
+            LayoutDashboard, FileText, Box, GraduationCap, Menu, Truck, 
+            TrendingUp, AlertTriangle, DollarSign, Package, 
+            Calculator, Download, Send, MapPin, Users, Search, Map, Navigation,
+            AlertCircle, CheckCircle, Plus, Minus,
+            Sparkles, Save, Trash2, Loader2,
+            Phone, Mail, User, Star, Building, BookOpen
+        } = LucideReact;
+
+        // Contexto para API Key
+        const ApiKeyContext = React.createContext({ key: '', setKey: () => {} });
+
+        /************************************************************
+         * 2. CONSTANTS & MOCK DATA
+         ************************************************************/
+        const Zone = {
+            NORTE: 'Norte',
+            CENTRO: 'Centro',
+            SUR: 'Sur',
+            AUSTRAL: 'Austral'
+        };
+
+        const Category = {
+            CONSUMIBLE: 'Consumible',
+            EQUIPO: 'Equipo',
+            EPP: 'EPP',
+            PAPELERIA: 'Papelería'
+        };
+
+        const MOCK_SUPPLIERS = [
+            { id: 's1', name: 'Ferretería Industrial Santiago', zone: Zone.CENTRO, rating: 4.8, category: 'General', city: 'Santiago', email: 'ventas@ferreteriasantiago.cl', suppliedCourses: ['Electricidad Residencial'] },
+            { id: 's2', name: 'Minería & Insumos Norte', zone: Zone.NORTE, rating: 4.5, category: 'Industrial', city: 'Antofagasta', phone: '+56 55 222 3333', suppliedCourses: ['Soldadura Básica SMAW'] },
+            { id: 's4', name: 'Proveedores Patagónicos', zone: Zone.AUSTRAL, rating: 4.7, category: 'General', city: 'Punta Arenas' },
+            { id: 'pdf1', name: 'ELECTROCOM', zone: Zone.SUR, rating: 4.8, category: 'Materiales Eléctricos (Especializado)', address: 'Av. Manuel Rodríguez Nº 551', city: 'Concepción', contactPerson: '', email: 'jarias@electrocom.cl', phone: '(+56) 41 224 4077', suppliedCourses: ['Electricidad Residencial', 'Instalador Eléctrico'] },
+            { id: 'pdf2', name: 'Vitel Energía', zone: Zone.SUR, rating: 4.6, category: 'Soluciones Eléctricas (Canalización, Protecciones)', address: 'Av. Cristóbal Colón 9765, Bodega A4', city: 'Concepción/Hualpén', contactPerson: '', email: 'rrojas@vitel.cl', phone: '(+56) 41 333 7136', suppliedCourses: ['Instalador Eléctrico'] },
+            { id: 'pdf3', name: 'Aceros y Herramientas Ltda.', zone: Zone.SUR, rating: 4.5, category: 'Herramientas y Soldadura', address: 'Montriou 1410, Barrio Norte', city: 'Concepción', contactPerson: '', email: 'ventas@acerosyherramientas.cl', phone: '(+56) 41 223 4924', suppliedCourses: ['Soldadura Básica SMAW'] },
+            { id: 'pdf4', name: 'Gases Bio Bio', zone: Zone.SUR, rating: 4.7, category: 'Insumos de Soldadura (Gases, Electrodos)', address: 'Avda. Las Industrias 2420', city: 'Los Ángeles', contactPerson: '', email: 'gasesbiobio@gmail.com', phone: '(+56) 9 7388 7411', suppliedCourses: ['Técnicas de Soldadura'] },
+            { id: 'pdf5', name: 'Servifast Ferretería', zone: Zone.SUR, rating: 4.3, category: 'Ferretería General y Consumibles', address: '', city: 'Concepción', contactPerson: '', email: '', phone: '(+56 9) 4491 858' },
+            { id: 'pdf6', name: 'Ferretería Solucenter Arauco', zone: Zone.SUR, rating: 4.9, category: 'Ferretería Industrial (Herramientas, EP)', address: 'Condell 615', city: 'Arauco', contactPerson: 'Carolina Figueroa', email: 'contacto@solucenter.cl', phone: '(+56) 41-330643', suppliedCourses: ['Técnicas de Soldadura', 'Instalador Eléctrico'] },
+            { id: 'pdf7', name: 'Ferretería Fedimar', zone: Zone.SUR, rating: 4.4, category: 'Ferretería y Materiales de Construcción', address: 'Cochrane #268', city: 'Arauco', contactPerson: '', email: 'fedimar2013@gmail.com', phone: '(+56) 44 288 2743' },
+        ];
+
+        const MOCK_MATERIALS = [
+            { id: 'm1', name: 'Electrodo 6013 1/8" (Caja 5kg)', category: Category.CONSUMIBLE, unit: 'caja', currentStock: 50, minStock: 20, basePrice: 18500 },
+            { id: 'm2', name: 'Guantes de Carnaza', category: Category.EPP, unit: 'par', currentStock: 15, minStock: 25, basePrice: 4500 },
+            { id: 'm3', name: 'Careta para Soldar Fotosensible', category: Category.EQUIPO, unit: 'pza', currentStock: 8, minStock: 10, basePrice: 35000 },
+            { id: 'm4', name: 'Manual del Participante (Impreso)', category: Category.PAPELERIA, unit: 'pza', currentStock: 100, minStock: 50, basePrice: 4500 },
+            { id: 'm5', name: 'Placa de Acero 10x10cm', category: Category.CONSUMIBLE, unit: 'pza', currentStock: 200, minStock: 100, basePrice: 3200 },
+            { id: 'm6', name: 'Lápiz Grafito #2', category: Category.PAPELERIA, unit: 'pza', currentStock: 500, minStock: 100, basePrice: 500 },
+            { id: 'm7', name: 'Multímetro Digital Industrial', category: Category.EQUIPO, unit: 'pza', currentStock: 5, minStock: 5, basePrice: 45000 },
+            { id: 'm8', name: 'Máquina de Soldar Arco Manual', category: Category.EQUIPO, unit: 'pza', currentStock: 4, minStock: 5, basePrice: 280000 },
+            { id: 'm9', name: 'Tronzadora de Metales', category: Category.EQUIPO, unit: 'pza', currentStock: 1, minStock: 1, basePrice: 150000 },
+            { id: 'm10', name: 'Esmeril Angular 4.5"', category: Category.EQUIPO, unit: 'pza', currentStock: 6, minStock: 5, basePrice: 42000 },
+            { id: 'm11', name: 'Escobilla Metálica', category: Category.EQUIPO, unit: 'pza', currentStock: 20, minStock: 10, basePrice: 2500 },
+            { id: 'm12', name: 'Picasal (Picador de escoria)', category: Category.EQUIPO, unit: 'pza', currentStock: 20, minStock: 10, basePrice: 3800 },
+            { id: 'm13', name: 'Guantes de Cabritilla', category: Category.EPP, unit: 'par', currentStock: 50, minStock: 20, basePrice: 5500 },
+            { id: 'm14', name: 'Guantes Mosqueteros', category: Category.EPP, unit: 'par', currentStock: 50, minStock: 20, basePrice: 6800 },
+            { id: 'm15', name: 'Pechera de Cuero', category: Category.EPP, unit: 'pza', currentStock: 15, minStock: 10, basePrice: 12000 },
+            { id: 'm16', name: 'Tapones Auditivos', category: Category.EPP, unit: 'par', currentStock: 200, minStock: 50, basePrice: 800 },
+            { id: 'm17', name: 'Antiparras de Seguridad', category: Category.EPP, unit: 'par', currentStock: 80, minStock: 30, basePrice: 3500 },
+            { id: 'm18', name: 'Electrodo E6011 3/32" (Bolsa 5kg)', category: Category.CONSUMIBLE, unit: 'bolsa', currentStock: 10, minStock: 5, basePrice: 16000 },
+            { id: 'm19', name: 'Disco de Corte Fino 4.5"', category: Category.CONSUMIBLE, unit: 'pza', currentStock: 100, minStock: 50, basePrice: 1200 },
+            { id: 'm20', name: 'Pletina 38x3mm x 6m', category: Category.CONSUMIBLE, unit: 'tira', currentStock: 10, minStock: 5, basePrice: 14500 },
+            { id: 'm21', name: 'Disco de Corte 14"', category: Category.CONSUMIBLE, unit: 'pza', currentStock: 20, minStock: 5, basePrice: 5500 },
+            { id: 'm22', name: 'Evaluación Impresa', category: Category.PAPELERIA, unit: 'pza', currentStock: 500, minStock: 50, basePrice: 150 },
+        ];
+
+        const MOCK_COURSES = [
+            {
+                id: 'c1',
+                name: 'Soldadura Básica SMAW',
+                description: 'Curso introductorio a soldadura por arco eléctrico.',
+                materials: [
+                    { materialId: 'm1', quantityPerStudent: 0.2 },
+                    { materialId: 'm2', quantityPerStudent: 1 },
+                    { materialId: 'm4', quantityPerStudent: 1 },
+                    { materialId: 'm5', quantityPerStudent: 5 },
+                    { materialId: 'm3', quantityPerStudent: 5, isShared: true },
+                ]
+            },
+            {
+                id: 'c2',
+                name: 'Electricidad Residencial',
+                description: 'Fundamentos de instalaciones eléctricas.',
+                materials: [
+                    { materialId: 'm7', quantityPerStudent: 2, isShared: true },
+                    { materialId: 'm4', quantityPerStudent: 1 },
+                    { materialId: 'm2', quantityPerStudent: 1 },
+                ]
+            },
+            {
+                id: 'c3',
+                name: 'Técnicas de Soldadura (Importado PDF)',
+                description: 'Curso completo de técnicas de soldadura con lista de materiales importada.',
+                materials: [
+                    { materialId: 'm8', quantityPerStudent: 5, isShared: true },
+                    { materialId: 'm9', quantityPerStudent: 1, isShared: true },
+                    { materialId: 'm10', quantityPerStudent: 3, isShared: true },
+                    { materialId: 'm11', quantityPerStudent: 5, isShared: true },
+                    { materialId: 'm12', quantityPerStudent: 5, isShared: true },
+                    { materialId: 'm13', quantityPerStudent: 1 },
+                    { materialId: 'm14', quantityPerStudent: 1 },
+                    { materialId: 'm15', quantityPerStudent: 1 },
+                    { materialId: 'm16', quantityPerStudent: 1 },
+                    { materialId: 'm17', quantityPerStudent: 1 },
+                    { materialId: 'm3', quantityPerStudent: 1 },
+                    { materialId: 'm18', quantityPerStudent: 2, isShared: true },
+                    { materialId: 'm1', quantityPerStudent: 2, isShared: true },
+                    { materialId: 'm19', quantityPerStudent: 1 },
+                    { materialId: 'm20', quantityPerStudent: 1 },
+                    { materialId: 'm21', quantityPerStudent: 1 },
+                    { materialId: 'm22', quantityPerStudent: 1 },
+                ]
+            }
+        ];
+
+        const MOCK_LOCATIONS = {
+            [Zone.NORTE]: [
+                { region: 'Arica y Parinacota', communes: ['Arica', 'Putre'] },
+                { region: 'Tarapacá', communes: ['Iquique', 'Alto Hospicio', 'Pozo Almonte'] },
+                { region: 'Antofagasta', communes: ['Antofagasta', 'Calama', 'Tocopilla', 'Mejillones'] },
+                { region: 'Atacama', communes: ['Copiapó', 'Vallenar', 'Caldera'] },
+                { region: 'Coquimbo', communes: ['La Serena', 'Coquimbo', 'Ovalle', 'Illapel'] },
+            ],
+            [Zone.CENTRO]: [
+                { region: 'Valparaíso', communes: ['Valparaíso', 'Viña del Mar', 'Quilpué', 'Villa Alemana', 'San Antonio'] },
+                { region: 'Metropolitana', communes: ['Santiago', 'Providencia', 'Las Condes', 'Maipú', 'Puente Alto', 'La Florida'] },
+                { region: "O'Higgins", communes: ['Rancagua', 'San Fernando', 'Rengo'] },
+                { region: 'Maule', communes: ['Talca', 'Curicó', 'Linares'] },
+            ],
+            [Zone.SUR]: [
+                { region: 'Ñuble', communes: ['Chillán', 'San Carlos'] },
+                { region: 'Biobío', communes: ['Concepción', 'Talcahuano', 'Los Ángeles', 'Coronel', 'Hualpén', 'Arauco'] },
+                { region: 'La Araucanía', communes: ['Temuco', 'Padre Las Casas', 'Villarrica', 'Pucón'] },
+                { region: 'Los Ríos', communes: ['Valdivia', 'La Unión'] },
+                { region: 'Los Lagos', communes: ['Puerto Montt', 'Osorno', 'Puerto Varas', 'Castro'] },
+            ],
+            [Zone.AUSTRAL]: [
+                { region: 'Aysén', communes: ['Coyhaique', 'Puerto Aysén'] },
+                { region: 'Magallanes', communes: ['Punta Arenas', 'Puerto Natales', 'Porvenir'] },
+            ],
+        };
+
+        /************************************************************
+         * 3. SERVICE (Direct Fetch replacement)
+         ************************************************************/
+        const generateCourseMaterials = async (courseName, description, apiKey) => {
+            if (!apiKey) throw new Error("API Key faltante");
+            
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const prompt = `
+                Act as an expert instructional designer and logistics coordinator for technical training.
+                Create a detailed Bill of Materials (BOM) for a presencial course titled "${courseName}".
+                Description: ${description}.
+                List the materials needed for ONE student.
+                Categorize them into: Consumible, Equipo, EPP, or Papelería.
+            `;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING" },
+                                category: { type: "STRING", enum: ["Consumible", "Equipo", "EPP", "Papelería"] },
+                                quantityPerStudent: { type: "NUMBER" },
+                                unit: { type: "STRING" },
+                                reasoning: { type: "STRING" }
+                            },
+                            required: ["name", "category", "quantityPerStudent", "unit", "reasoning"]
+                        }
+                    }
+                }
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Error en Gemini API");
+            
+            const data = await response.json();
+            return JSON.parse(data.candidates[0].content.parts[0].text);
+        };
+
+        /************************************************************
+         * 4. COMPONENTS
+         ************************************************************/
+        
+        // Layout
+        const Layout = ({ currentView, onChangeView, children }) => {
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const { key, setKey } = React.useContext(ApiKeyContext);
+
+            const navItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                { id: 'quotes', label: 'Cotizador', icon: FileText },
+                { id: 'inventory', label: 'Inventario', icon: Box },
+                { id: 'courses', label: 'Cursos', icon: GraduationCap },
+                { id: 'suppliers', label: 'Proveedores', icon: Truck },
+            ];
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans">
+                    {/* Mobile Header */}
+                    <div className="md:hidden bg-[#1A1A1A] text-white p-4 flex justify-between items-center border-b-4 border-[#FFB800]">
+                        <span className="font-bold text-xl text-[#FFB800]">Duoc UC <span className="text-white font-normal text-sm ml-2">BOM Manager</span></span>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                            <Menu className="text-white" />
+                        </button>
+                    </div>
+
+                    {/* Sidebar */}
+                    <aside className={`
+                        ${isMobileMenuOpen ? 'block' : 'hidden'} 
+                        md:block bg-[#1A1A1A] text-gray-300 w-full md:w-64 flex-shrink-0 transition-all duration-300 flex flex-col
+                    `}>
+                        <div className="p-6 hidden md:block border-b border-gray-800">
+                            <h1 className="text-2xl font-extrabold text-[#FFB800]">Duoc UC</h1>
+                            <p className="text-xs text-gray-400 mt-1">Gestión de Materiales</p>
+                        </div>
+                        
+                        <nav className="mt-6 flex-1">
+                            {navItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = currentView === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => {
+                                            onChangeView(item.id);
+                                            setIsMobileMenuOpen(false);
+                                        }}
+                                        className={`w-full flex items-center px-6 py-4 transition-all duration-200 border-l-4 ${
+                                            isActive 
+                                                ? 'bg-[#FFB800] text-[#1A1A1A] border-[#FFB800] font-bold' 
+                                                : 'hover:bg-[#333333] hover:text-white border-transparent text-gray-300'
+                                        }`}
+                                    >
+                                        <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-[#1A1A1A]' : 'text-gray-400'}`} />
+                                        <span className="">{item.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                        
+                        <div className="p-6 bg-black border-t border-gray-800 space-y-2">
+                             <div className="text-xs text-gray-400 mb-1">Configuración API (Prototipo)</div>
+                             <input 
+                                type="password" 
+                                placeholder="Gemini API Key" 
+                                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-xs text-white"
+                                value={key}
+                                onChange={(e) => setKey(e.target.value)}
+                             />
+                            <p className="text-xs text-[#666666] pt-2">Versión Prototipo HTML</p>
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen bg-[#F9FAFB]">
+                        {children}
+                    </main>
+                </div>
+            );
+        };
+
+        // Dashboard
+        const Dashboard = () => {
+            const data = [
+                { name: 'Ene', cost: 4000, savings: 2400 },
+                { name: 'Feb', cost: 3000, savings: 1398 },
+                { name: 'Mar', cost: 2000, savings: 9800 },
+                { name: 'Abr', cost: 2780, savings: 3908 },
+                { name: 'May', cost: 1890, savings: 4800 },
+                { name: 'Jun', cost: 2390, savings: 3800 },
+            ];
+            const stockData = [
+                { name: 'Soldadura', stock: 85 },
+                { name: 'Electricidad', stock: 45 },
+                { name: 'Seguridad', stock: 90 },
+                { name: 'Papelería', stock: 30 },
+            ];
+
+            return (
+                <div className="space-y-6">
+                    <header className="mb-8 border-b border-gray-200 pb-4">
+                        <h2 className="text-3xl font-bold text-[#1A1A1A]">Dashboard General</h2>
+                        <p className="text-[#666666] mt-1">Resumen de operaciones, inventario y costos.</p>
+                    </header>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* KPI Cards */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#FFB800]">
+                            <div className="flex justify-between items-start">
+                                <div><p className="text-sm font-bold text-[#666666]">Cotizaciones Activas</p><h3 className="text-3xl font-bold text-[#1A1A1A] mt-2">12</h3></div>
+                                <div className="p-2 bg-yellow-50 text-[#FFB800] rounded-lg"><TrendingUp className="w-6 h-6" /></div>
+                            </div>
+                        </div>
+                         <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#1A1A1A]">
+                            <div className="flex justify-between items-start">
+                                <div><p className="text-sm font-bold text-[#666666]">Alertas de Stock</p><h3 className="text-3xl font-bold text-[#1A1A1A] mt-2">3</h3></div>
+                                <div className="p-2 bg-gray-100 text-[#1A1A1A] rounded-lg"><AlertTriangle className="w-6 h-6" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#666666]">
+                            <div className="flex justify-between items-start">
+                                <div><p className="text-sm font-bold text-[#666666]">Gasto Mensual</p><h3 className="text-3xl font-bold text-[#1A1A1A] mt-2">$45,200</h3></div>
+                                <div className="p-2 bg-gray-50 text-[#666666] rounded-lg"><DollarSign className="w-6 h-6" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#FFB800]">
+                            <div className="flex justify-between items-start">
+                                <div><p className="text-sm font-bold text-[#666666]">Cursos Ejecutados</p><h3 className="text-3xl font-bold text-[#1A1A1A] mt-2">8</h3></div>
+                                <div className="p-2 bg-yellow-50 text-[#FFB800] rounded-lg"><Package className="w-6 h-6" /></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-lg font-bold text-[#1A1A1A] mb-6">Tendencia de Costos</h3>
+                            <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={data}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" stroke="#666666" fontSize={12} />
+                                        <YAxis stroke="#666666" fontSize={12} />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="cost" stroke="#1A1A1A" strokeWidth={3} name="Costo Real" />
+                                        <Line type="monotone" dataKey="savings" stroke="#FFB800" strokeWidth={3} name="Ahorros Proyectados" />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-lg font-bold text-[#1A1A1A] mb-6">Nivel de Inventario</h3>
+                             <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={stockData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" stroke="#666666" fontSize={12} />
+                                        <YAxis stroke="#666666" fontSize={12} />
+                                        <Tooltip />
+                                        <Bar dataKey="stock" fill="#FFB800" radius={[4, 4, 0, 0]} name="Stock (%)" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // QuoteBuilder
+        const QuoteBuilder = () => {
+            const [selectedCourseId, setSelectedCourseId] = useState('');
+            const [participants, setParticipants] = useState(15);
+            const [selectedZone, setSelectedZone] = useState(Zone.CENTRO);
+            const [selectedRegion, setSelectedRegion] = useState('');
+            const [selectedCommune, setSelectedCommune] = useState('');
+            const [selectedSupplierId, setSelectedSupplierId] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [quoteGenerated, setQuoteGenerated] = useState(false);
+
+            const selectedCourse = MOCK_COURSES.find(c => c.id === selectedCourseId);
+            const availableRegions = useMemo(() => MOCK_LOCATIONS[selectedZone] || [], [selectedZone]);
+            const availableCommunes = useMemo(() => {
+                const regionData = availableRegions.find(r => r.region === selectedRegion);
+                return regionData ? regionData.communes : [];
+            }, [availableRegions, selectedRegion]);
+            const availableSuppliers = useMemo(() => MOCK_SUPPLIERS.filter(s => s.zone === selectedZone), [selectedZone]);
+
+            const calculatedItems = useMemo(() => {
+                if (!selectedCourse) return [];
+                return selectedCourse.materials.map(cm => {
+                    const material = MOCK_MATERIALS.find(m => m.id === cm.materialId);
+                    if (!material) return null;
+                    const totalQty = cm.isShared ? cm.quantityPerStudent : cm.quantityPerStudent * participants;
+                    const zoneMultiplier = (selectedZone === Zone.NORTE || selectedZone === Zone.AUSTRAL) ? 1.15 : 1.0;
+                    const estimatedPrice = material.basePrice * zoneMultiplier;
+                    const specificSupplier = MOCK_SUPPLIERS.find(s => s.id === selectedSupplierId);
+                    const defaultSupplier = MOCK_SUPPLIERS.find(s => s.zone === selectedZone) || MOCK_SUPPLIERS[0];
+                    const supplier = specificSupplier || defaultSupplier;
+                    return { material, totalQty, unitPrice: estimatedPrice, totalPrice: totalQty * estimatedPrice, supplier };
+                }).filter(Boolean);
+            }, [selectedCourse, participants, selectedZone, selectedSupplierId]);
+
+            const totalCost = calculatedItems.reduce((acc, item) => acc + item.totalPrice, 0);
+
+            return (
+                <div className="max-w-6xl mx-auto">
+                    <header className="mb-8 flex justify-between items-center border-b border-gray-200 pb-4">
+                        <div>
+                            <h2 className="text-3xl font-bold text-[#1A1A1A]">Generador de Cotizaciones</h2>
+                            <p className="text-[#666666] mt-1">Calcula costos precisos basados en listas de materiales estándar.</p>
+                        </div>
+                    </header>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+                                <h3 className="text-lg font-bold mb-6 flex items-center text-[#1A1A1A]">
+                                    <Calculator className="w-5 h-5 mr-2 text-[#FFB800]" /> Parámetros
+                                </h3>
+                                <div>
+                                    <label className="block text-sm font-bold text-[#666666] mb-1">Curso</label>
+                                    <select className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                                        value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}>
+                                        <option value="">Seleccionar curso...</option>
+                                        {MOCK_COURSES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-[#666666] mb-1">Participantes</label>
+                                    <input type="number" min="1" className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                                        value={participants} onChange={(e) => setParticipants(parseInt(e.target.value) || 0)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-[#666666] mb-1">Zona Geográfica</label>
+                                    <select className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                                        value={selectedZone} onChange={(e) => { setSelectedZone(e.target.value); setSelectedRegion(''); }}>
+                                        {Object.values(Zone).map(z => <option key={z} value={z}>{z}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-[#666666] mb-1">Región</label>
+                                    <select className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                                        value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} disabled={!availableRegions.length}>
+                                        <option value="">Seleccionar región...</option>
+                                        {availableRegions.map(r => <option key={r.region} value={r.region}>{r.region}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-[#666666] mb-1">Proveedor Preferente</label>
+                                    <select className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                                        value={selectedSupplierId} onChange={(e) => setSelectedSupplierId(e.target.value)}>
+                                        <option value="">Automático</option>
+                                        {availableSuppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <button className="w-full py-3 bg-[#FFB800] rounded-lg font-bold text-[#1A1A1A] shadow-md"
+                                    onClick={() => setQuoteGenerated(true)}>Calcular Costos</button>
+                            </div>
+                            {selectedCourse && (
+                                <div className="bg-[#1A1A1A] text-white p-6 rounded-xl shadow-lg border-t-4 border-[#FFB800]">
+                                    <h4 className="text-[#FFB800] text-xs font-bold uppercase tracking-wider mb-4">Resumen Estimado</h4>
+                                    <div className="flex justify-between items-end border-b border-gray-800 pb-2">
+                                        <span className="text-gray-300">Costo Total</span>
+                                        <span className="text-2xl font-bold text-white">${totalCost.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
+                             <div className="p-6 border-b border-gray-100 bg-gray-50"><h3 className="font-bold text-[#1A1A1A]">Desglose BOM</h3></div>
+                             <div className="p-6">
+                                {calculatedItems.length === 0 ? <p className="text-gray-400">Selecciona un curso</p> : (
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-100 font-bold uppercase text-xs text-[#666666]">
+                                            <tr><th className="px-4 py-2">Material</th><th className="px-4 py-2">Cant.</th><th className="px-4 py-2">Total</th><th className="px-4 py-2">Proveedor</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {calculatedItems.map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-yellow-50">
+                                                    <td className="px-4 py-2 font-medium">{item.material.name}</td>
+                                                    <td className="px-4 py-2">{item.totalQty.toFixed(1)}</td>
+                                                    <td className="px-4 py-2 font-bold">${item.totalPrice.toLocaleString()}</td>
+                                                    <td className="px-4 py-2 text-xs text-[#666666]">{item.supplier.name}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Inventory Component (Simplified)
+        const Inventory = () => (
+             <div className="max-w-6xl mx-auto">
+                 <h2 className="text-3xl font-bold text-[#1A1A1A] mb-6">Inventario Central</h2>
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-100 text-[#666666] font-bold text-xs uppercase">
+                            <tr><th className="px-6 py-4">Material</th><th className="px-6 py-4">Stock</th><th className="px-6 py-4">Estado</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {MOCK_MATERIALS.map(m => (
+                                <tr key={m.id} className="hover:bg-yellow-50">
+                                    <td className="px-6 py-4 font-bold text-[#1A1A1A]">{m.name}</td>
+                                    <td className="px-6 py-4">{m.currentStock} {m.unit}</td>
+                                    <td className="px-6 py-4">{m.currentStock <= m.minStock ? <span className="text-red-600 font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-1"/> Bajo</span> : <span className="text-emerald-600 font-bold flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Óptimo</span>}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                 </div>
+             </div>
+        );
+
+        // Course Manager
+        const CourseManager = () => {
+            const { key } = React.useContext(ApiKeyContext);
+            const [name, setName] = useState('');
+            const [desc, setDesc] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [materials, setMaterials] = useState([]);
+
+            const handleGenerate = async () => {
+                setLoading(true);
+                try {
+                    const res = await generateCourseMaterials(name, desc, key);
+                    setMaterials(res);
+                } catch(e) { alert(e.message); }
+                setLoading(false);
+            };
+
+            return (
+                 <div className="max-w-4xl mx-auto">
+                    <h2 className="text-3xl font-bold text-[#1A1A1A] mb-6">Gestión de Cursos (IA)</h2>
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 space-y-4">
+                        <input className="w-full p-3 border rounded" placeholder="Nombre del curso" value={name} onChange={e => setName(e.target.value)} />
+                        <textarea className="w-full p-3 border rounded h-24" placeholder="Descripción" value={desc} onChange={e => setDesc(e.target.value)} />
+                        <button onClick={handleGenerate} disabled={loading} className="bg-[#FFB800] text-[#1A1A1A] px-6 py-3 rounded-lg font-bold flex items-center">
+                            {loading ? <Loader2 className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>} Generar con IA
+                        </button>
+                    </div>
+                    {materials.length > 0 && (
+                        <div className="mt-8 bg-white rounded-xl shadow-sm border p-6">
+                            <h3 className="font-bold mb-4">Sugerencias IA:</h3>
+                            <ul className="space-y-2">
+                                {materials.map((m, i) => (
+                                    <li key={i} className="flex justify-between border-b pb-2">
+                                        <span>{m.name}</span>
+                                        <span className="font-mono bg-gray-100 px-2 rounded">{m.quantityPerStudent} {m.unit}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                 </div>
+            );
+        };
+
+        // Supplier Manager (Simplified)
+        const SupplierManager = () => {
+            const [term, setTerm] = useState('');
+            const filtered = MOCK_SUPPLIERS.filter(s => s.name.toLowerCase().includes(term.toLowerCase()));
+            return (
+                <div className="max-w-6xl mx-auto">
+                    <h2 className="text-3xl font-bold text-[#1A1A1A] mb-6">Proveedores</h2>
+                    <div className="mb-6"><input className="w-full p-3 border rounded shadow-sm" placeholder="Buscar..." value={term} onChange={e => setTerm(e.target.value)}/></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filtered.map(s => (
+                            <div key={s.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                                <div className="flex justify-between"><h3 className="font-bold text-[#1A1A1A]">{s.name}</h3><span className="text-xs bg-gray-100 px-2 py-1 rounded">{s.zone}</span></div>
+                                <p className="text-sm text-gray-500 mt-2">{s.category}</p>
+                                <div className="mt-4 pt-4 border-t text-sm space-y-1">
+                                    {s.city && <div className="flex items-center text-gray-600"><MapPin className="w-3 h-3 mr-2"/>{s.city}</div>}
+                                    {s.phone && <div className="flex items-center text-gray-600"><Phone className="w-3 h-3 mr-2"/>{s.phone}</div>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // App Main
+        const App = () => {
+            const [view, setView] = useState('dashboard');
+            const [apiKey, setApiKey] = useState('');
+
+            return (
+                <ApiKeyContext.Provider value={{ key: apiKey, setKey: setApiKey }}>
+                    <Layout currentView={view} onChangeView={setView}>
+                        {view === 'dashboard' && <Dashboard />}
+                        {view === 'quotes' && <QuoteBuilder />}
+                        {view === 'inventory' && <Inventory />}
+                        {view === 'courses' && <CourseManager />}
+                        {view === 'suppliers' && <SupplierManager />}
+                    </Layout>
+                </ApiKeyContext.Provider>
+            );
+        };
+
+        // Render
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

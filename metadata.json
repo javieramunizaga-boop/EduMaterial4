@@ -1,0 +1,5 @@
+{
+  "name": "EduMaterial BOM Manager",
+  "description": "Herramienta centralizada para gestionar listas de materiales, cotizaciones y control de inventarios para cursos presenciales.",
+  "requestFramePermissions": []
+}
